@@ -1,6 +1,0 @@
-{
-  "jira_project_key": "RTN",
-  "bq_project_id": "haulmer-ucloud-production",
-  "bq_dataset_id": "Jira",
-  "force_project_in_jql": true
-}
