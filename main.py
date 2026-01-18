@@ -2,6 +2,7 @@
 print(">>> main.py arrancó")
 
 import os
+import uuid
 from core.logging import get_logger
 from core.secrets import get_secret_json
 from core.jira_client import JiraClient
@@ -12,26 +13,34 @@ from metadata.summary import insert_summary
 from config.runtime import load_runtime_config
 
 logger = get_logger("jira_etl")
-logger.warning("🔥 Logger inicializado correctamente")
 
 
 def main():
-    logger.info("🚀 Entrando a main()")
+    run_id = str(uuid.uuid4())[:8]
+
+    logger.info(
+        "🚀 Iniciando ejecución Jira ETL",
+        extra={"run_id": run_id},
+    )
 
     # ==========================================================
     # 🔁 Detectar modo de ejecución
     # ==========================================================
     is_gcp = bool(os.getenv("RUNTIME_CONFIG_JSON"))
     logger.info(
-        "🧭 Modo de ejecución detectado: %s",
+        "🧭 Modo de ejecución: %s",
         "GCP (Workflow)" if is_gcp else "LOCAL",
+        extra={"run_id": run_id},
     )
 
     # ==========================================================
     # 📥 Cargar runtime config
     # ==========================================================
     runtime = load_runtime_config()
-    logger.info("📥 Runtime config cargado: %s", runtime)
+    logger.info(
+        "📥 Runtime config cargado",
+        extra={"run_id": run_id, "runtime": runtime},
+    )
 
     jira_project_key = runtime["jira_project_key"]
     bq_project_id = runtime.get("bq_project_id", "haulmer-ucloud-production")
@@ -41,7 +50,10 @@ def main():
     # ==========================================================
     # 🔐 Secret Manager
     # ==========================================================
-    logger.info("🔐 Cargando secreto Jira desde Secret Manager")
+    logger.info(
+        "🔐 Cargando secreto Jira",
+        extra={"run_id": run_id},
+    )
     secrets = get_secret_json(bq_project_id, "Jira")
 
     jira = JiraClient(
@@ -57,7 +69,7 @@ def main():
     bq_client = get_client(bq_project_id)
 
     # ==========================================================
-    # 🧠 Resolver ejecuciones (PROJECT only)
+    # 🧠 Resolver ejecuciones
     # ==========================================================
     boards_to_run = resolve_boards(
         jira=jira,
@@ -65,16 +77,22 @@ def main():
         runtime_boards=runtime_boards,
     )
 
-    logger.info("📦 Ejecuciones a realizar: %s", boards_to_run)
+    logger.info(
+        "📦 Ejecuciones resueltas",
+        extra={"run_id": run_id, "boards": boards_to_run},
+    )
 
     # ==========================================================
     # 🚀 Ejecutar ETL
     # ==========================================================
     for b in boards_to_run:
         logger.info(
-            "➡️ Ejecutando ETL | project=%s | table=%s",
-            jira_project_key,
-            b["target_table"],
+            "➡️ Ejecutando ETL",
+            extra={
+                "run_id": run_id,
+                "project": jira_project_key,
+                "target_table": b["target_table"],
+            },
         )
 
         run_board(
@@ -92,9 +110,12 @@ def main():
             ),
         )
 
-    logger.info("🏁 main() finalizado correctamente")
+    logger.info(
+        "🏁 Ejecución finalizada correctamente",
+        extra={"run_id": run_id},
+    )
 
 
 if __name__ == "__main__":
-    logger.warning("🧪 __main__ detectado, ejecutando main()")
+    logger.info("🧪 __main__ detectado")
     main()
