@@ -1,11 +1,13 @@
 #!/bin/bash
 set -euo pipefail
 
+# --------------------------------------------------
+# 🔧 Redirigir TODO a STDOUT (Cloud Logging = INFO)
+# --------------------------------------------------
+exec > >(tee /var/log/startup.log) 2>&1
+
 echo "[BOOT] 🚀 Startup Jira ETL iniciado"
 
-# --------------------------------------------------
-# Helpers
-# --------------------------------------------------
 log() {
   echo "[BOOT] $1"
 }
@@ -17,13 +19,13 @@ fail() {
 }
 
 # --------------------------------------------------
-# Metadata helper
+# Metadata
 # --------------------------------------------------
 META="http://metadata.google.internal/computeMetadata/v1/instance/attributes"
 HEADER="Metadata-Flavor: Google"
 
 # --------------------------------------------------
-# Export runtime config
+# Runtime config
 # --------------------------------------------------
 log "📥 Cargando RUNTIME_CONFIG_JSON"
 export RUNTIME_CONFIG_JSON="$(curl -sf ${META}/RUNTIME_CONFIG_JSON -H "${HEADER}")" \
@@ -39,14 +41,14 @@ GITHUB_TOKEN="$(curl -sf ${META}/GITHUB_TOKEN -H "${HEADER}")" \
 # --------------------------------------------------
 # Dependencias SO
 # --------------------------------------------------
-log "📦 Instalando dependencias del sistema"
-apt-get update -y
+log "📦 Instalando dependencias SO"
+apt-get update -y >/dev/null
 apt-get install -y \
   git \
   python3 \
   python3-venv \
   python3-pip \
-  build-essential
+  build-essential >/dev/null
 
 log "✅ Dependencias SO instaladas"
 
@@ -57,25 +59,25 @@ cd /opt
 
 if [ ! -d "Api_Jira" ]; then
   log "📥 Clonando repo Api_Jira"
-  git clone https://${GITHUB_TOKEN}@github.com/drojas-haulmer/Api_Jira.git
+  git clone -q https://${GITHUB_TOKEN}@github.com/drojas-haulmer/Api_Jira.git
 else
-  log "📦 Repo ya existe, actualizando"
+  log "📦 Repo existente, actualizando"
   cd Api_Jira
-  git pull
+  git pull -q
   cd ..
 fi
 
 cd Api_Jira
 
 # --------------------------------------------------
-# Entorno virtual
+# Python venv
 # --------------------------------------------------
 log "🐍 Creando entorno virtual"
 python3 -m venv venv
 source venv/bin/activate
 
-pip install --upgrade pip
-pip install -r requirements.txt
+pip install --upgrade pip -q
+pip install -r requirements.txt -q
 
 log "✅ Dependencias Python instaladas"
 
@@ -88,7 +90,7 @@ python main.py \
   || fail "ETL falló"
 
 # --------------------------------------------------
-# Apagar VM (esto dispara el delete del Workflow)
+# Apagar VM (Workflow la borra)
 # --------------------------------------------------
 log "🧹 Apagando VM"
 shutdown -h now
