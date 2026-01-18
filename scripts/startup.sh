@@ -2,11 +2,9 @@
 set -euo pipefail
 
 # --------------------------------------------------
-# 🔧 Redirigir TODO a STDOUT (Cloud Logging = INFO)
+# 🔧 Logs a STDOUT (Cloud Logging = INFO)
 # --------------------------------------------------
 exec > >(tee /var/log/startup.log) 2>&1
-
-echo "[BOOT] 🚀 Startup Jira ETL iniciado"
 
 log() {
   echo "[BOOT] $1"
@@ -14,9 +12,10 @@ log() {
 
 fail() {
   echo "[BOOT][ERROR] $1"
-  shutdown -h now
   exit 1
 }
+
+log "🚀 Startup Jira ETL iniciado"
 
 # --------------------------------------------------
 # Metadata
@@ -85,12 +84,12 @@ log "✅ Dependencias Python instaladas"
 # Ejecutar ETL
 # --------------------------------------------------
 log "▶️ Ejecutando Jira ETL"
-python main.py \
-  && log "🏁 ETL finalizado correctamente" \
-  || fail "ETL falló"
+python main.py || fail "ETL falló"
+
+log "🏁 ETL finalizado correctamente"
 
 # --------------------------------------------------
-# Apagar VM (Workflow la borra)
+# ⏸ Suspender VM (Workflow decide borrado)
 # --------------------------------------------------
-log "🧹 Apagando VM"
-shutdown -h now
+log "⏸ Suspendiendo VM (Workflow se encarga del borrado)"
+systemctl suspend
