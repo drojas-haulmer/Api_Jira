@@ -89,7 +89,7 @@ python main.py || fail "ETL falló"
 log "🏁 ETL finalizado correctamente"
 
 # --------------------------------------------------
-# ⏸ Suspender VM (Workflow decide borrado)
+# 🔴 Apagar VM (Workflow se encarga del borrado)
 # --------------------------------------------------
-log "⏸ Suspendiendo VM (Workflow se encarga del borrado)"
-systemctl suspend
+log "🛑 Apagando VM (Workflow detectará TERMINATED y borrará)"
+shutdown -h now
