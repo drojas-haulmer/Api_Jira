@@ -1,45 +1,94 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
-LOG_FILE="/var/log/jira_etl.log"
+echo "[BOOT] 🚀 Startup Jira ETL iniciado"
 
-exec > >(tee -a "$LOG_FILE") 2>&1
+# --------------------------------------------------
+# Helpers
+# --------------------------------------------------
+log() {
+  echo "[BOOT] $1"
+}
 
-echo "[BOOT] 🚀 Startup Jira ETL VM"
+fail() {
+  echo "[BOOT][ERROR] $1"
+  shutdown -h now
+  exit 1
+}
 
-# -------------------------------
-# Silenciar apt (CRÍTICO)
-# -------------------------------
-export DEBIAN_FRONTEND=noninteractive
-apt-get update -qq
-apt-get install -y -qq \
+# --------------------------------------------------
+# Metadata helper
+# --------------------------------------------------
+META="http://metadata.google.internal/computeMetadata/v1/instance/attributes"
+HEADER="Metadata-Flavor: Google"
+
+# --------------------------------------------------
+# Export runtime config
+# --------------------------------------------------
+log "📥 Cargando RUNTIME_CONFIG_JSON"
+export RUNTIME_CONFIG_JSON="$(curl -sf ${META}/RUNTIME_CONFIG_JSON -H "${HEADER}")" \
+  || fail "No se pudo obtener RUNTIME_CONFIG_JSON"
+
+# --------------------------------------------------
+# GitHub token
+# --------------------------------------------------
+log "🔐 Cargando token GitHub"
+GITHUB_TOKEN="$(curl -sf ${META}/GITHUB_TOKEN -H "${HEADER}")" \
+  || fail "No se pudo obtener GITHUB_TOKEN"
+
+# --------------------------------------------------
+# Dependencias SO
+# --------------------------------------------------
+log "📦 Instalando dependencias del sistema"
+apt-get update -y
+apt-get install -y \
+  git \
   python3 \
   python3-venv \
   python3-pip \
-  git \
   build-essential
 
-echo "[BOOT] ✅ Dependencias SO instaladas"
+log "✅ Dependencias SO instaladas"
 
-# -------------------------------
-# Código
-# -------------------------------
-cd /opt || exit 1
+# --------------------------------------------------
+# Clonar repo
+# --------------------------------------------------
+cd /opt
 
-if [ ! -d Api_Jira ]; then
-  echo "[BOOT] 📦 Clonando repo"
-  git clone https://$GITHUB_TOKEN@github.com/drojas-haulmer/Api_Jira.git
+if [ ! -d "Api_Jira" ]; then
+  log "📥 Clonando repo Api_Jira"
+  git clone https://${GITHUB_TOKEN}@github.com/drojas-haulmer/Api_Jira.git
+else
+  log "📦 Repo ya existe, actualizando"
+  cd Api_Jira
+  git pull
+  cd ..
 fi
 
 cd Api_Jira
 
+# --------------------------------------------------
+# Entorno virtual
+# --------------------------------------------------
+log "🐍 Creando entorno virtual"
 python3 -m venv venv
 source venv/bin/activate
 
-pip install -q -r requirements.txt
+pip install --upgrade pip
+pip install -r requirements.txt
 
-echo "[BOOT] ▶️ Ejecutando ETL"
-python main.py
+log "✅ Dependencias Python instaladas"
 
-echo "[BOOT] 🛑 Apagando VM"
+# --------------------------------------------------
+# Ejecutar ETL
+# --------------------------------------------------
+log "▶️ Ejecutando Jira ETL"
+python main.py \
+  && log "🏁 ETL finalizado correctamente" \
+  || fail "ETL falló"
+
+# --------------------------------------------------
+# Apagar VM (esto dispara el delete del Workflow)
+# --------------------------------------------------
+log "🧹 Apagando VM"
 shutdown -h now
