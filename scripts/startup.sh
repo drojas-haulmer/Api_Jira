@@ -1,38 +1,45 @@
 #!/bin/bash
 set -e
 
-echo "[INFO] 🚀 Iniciando Jira ETL"
+LOG_FILE="/var/log/jira_etl.log"
 
-export HOME=/root
+exec > >(tee -a "$LOG_FILE") 2>&1
 
-# ================================
-# ✅ RUNTIME CONFIG (JSON REAL)
-# ================================
-export RUNTIME_CONFIG_JSON='{
-  "jira_project_key": "RTN",
-  "bq_project_id": "haulmer-ucloud-production",
-  "bq_dataset_id": "Jira"
-}'
+echo "[BOOT] 🚀 Startup Jira ETL VM"
 
-echo "[INFO] 📦 Instalando dependencias base"
-apt-get update -y
-apt-get install -y git python3 python3-pip python3-venv
+# -------------------------------
+# Silenciar apt (CRÍTICO)
+# -------------------------------
+export DEBIAN_FRONTEND=noninteractive
+apt-get update -qq
+apt-get install -y -qq \
+  python3 \
+  python3-venv \
+  python3-pip \
+  git \
+  build-essential
 
-echo "[INFO] 📁 Clonando repositorio"
-cd /opt
-git clone https://github.com/drojas-haulmer/Api_Jira.git
+echo "[BOOT] ✅ Dependencias SO instaladas"
+
+# -------------------------------
+# Código
+# -------------------------------
+cd /opt || exit 1
+
+if [ ! -d Api_Jira ]; then
+  echo "[BOOT] 📦 Clonando repo"
+  git clone https://$GITHUB_TOKEN@github.com/drojas-haulmer/Api_Jira.git
+fi
+
 cd Api_Jira
 
-echo "[INFO] 🐍 Creando entorno virtual"
 python3 -m venv venv
 source venv/bin/activate
 
-echo "[INFO] 📦 Instalando requirements"
-pip install --upgrade pip
-pip install -r requirements.txt
+pip install -q -r requirements.txt
 
-echo "[INFO] 🚀 Ejecutando ETL"
+echo "[BOOT] ▶️ Ejecutando ETL"
 python main.py
 
-echo "[INFO] 🧹 Apagando VM"
+echo "[BOOT] 🛑 Apagando VM"
 shutdown -h now
