@@ -1,7 +1,7 @@
 # bq/utils.py
 from google.cloud import bigquery
 
-def get_max_updated_at(bq_client, full_table_id: str) -> str | None:
+def get_max_updated_at(bq_client, full_table_id: str):
     query = f"""
         SELECT
           MAX(fecha_actualizacion) AS max_fecha
@@ -9,5 +9,5 @@ def get_max_updated_at(bq_client, full_table_id: str) -> str | None:
     """
     rows = list(bq_client.query(query).result())
     if rows and rows[0].max_fecha:
-        return rows[0].max_fecha.strftime("%Y-%m-%d %H:%M:%S")
+        return rows[0].max_fecha
     return None

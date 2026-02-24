@@ -85,6 +85,9 @@ def main():
     # ==========================================================
     # 🚀 Ejecutar ETL
     # ==========================================================
+    execution_mode = "GCP_WORKFLOW" if is_gcp else "LOCAL"
+    board_results = []
+
     for b in boards_to_run:
         logger.info(
             "➡️ Ejecutando ETL",
@@ -95,9 +98,13 @@ def main():
             },
         )
 
-        run_board(
+        result = run_board(
             target_table=b["target_table"],
             jira_project_key=jira_project_key,
+            scope=b.get("scope", "PROJECT"),
+            jira_board_id=b.get("board_id"),
+            run_id=run_id,
+            execution_mode=execution_mode,
             jira=jira,
             bq_client=bq_client,
             bq_project_id=bq_project_id,
@@ -109,10 +116,28 @@ def main():
                 row,
             ),
         )
+        board_results.append(result)
+
+    total_received = sum(r["rows_received"] for r in board_results)
+    total_processed = sum(r["rows_processed"] for r in board_results)
+    total_invalid = sum(r["rows_invalid"] for r in board_results)
+    total_inserted = sum(r["rows_inserted"] for r in board_results)
+    total_updated = sum(r["rows_updated"] for r in board_results)
+    total_unchanged = sum(r["rows_unchanged"] for r in board_results)
+    failed_boards = [r["target_table"] for r in board_results if r["status"] != "SUCCESS"]
 
     logger.info(
-        "🏁 Ejecución finalizada correctamente",
-        extra={"run_id": run_id},
+        "🏁 Ejecución finalizada | mode=%s | boards=%d | failed=%d | received=%d | valid=%d | invalid=%d | inserted=%d | updated=%d | unchanged=%d",
+        execution_mode,
+        len(board_results),
+        len(failed_boards),
+        total_received,
+        total_processed,
+        total_invalid,
+        total_inserted,
+        total_updated,
+        total_unchanged,
+        extra={"run_id": run_id, "failed_boards": failed_boards},
     )
 
 

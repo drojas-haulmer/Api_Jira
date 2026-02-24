@@ -1,0 +1,92 @@
+# ============================================
+# Jira ETL – GCP Workflow (PRODUCCIÓN)
+# ============================================
+
+main:
+  params: []
+  steps:
+
+    # --------------------------------------------------
+    # Log inicial
+    # --------------------------------------------------
+    - start_log:
+        call: sys.log
+        args:
+          severity: INFO
+          json:
+            message: "🚀 Iniciando Jira ETL Workflow"
+
+    # --------------------------------------------------
+    # Variables base
+    # --------------------------------------------------
+    - init_vars:
+        assign:
+          - VM_NAME: "jira-etl-clo-project"
+          - PROJECT_ID: "haulmer-ucloud-production"
+          - ZONE: "us-east1-b"
+          - MACHINE_TYPE: "n2d-standard-4"
+          - GITHUB_SECRET: "projects/634452053381/secrets/github-drojas-haulmer/versions/latest"
+
+    # --------------------------------------------------
+    # Obtener token GitHub (Secret Manager)
+    # --------------------------------------------------
+    - get_github_token:
+        call: googleapis.secretmanager.v1.projects.secrets.versions.access
+        args:
+          name: ${GITHUB_SECRET}
+        result: github_token
+
+    # --------------------------------------------------
+    # Crear VM (la VM se autodestruye)
+    # --------------------------------------------------
+    - create_vm:
+        call: googleapis.compute.v1.instances.insert
+        args:
+          project: ${PROJECT_ID}
+          zone: ${ZONE}
+          body:
+            name: ${VM_NAME}
+            machineType: ${"zones/" + ZONE + "/machineTypes/" + MACHINE_TYPE}
+
+            serviceAccounts:
+              - email: "bigquery@haulmer-ucloud-production.iam.gserviceaccount.com"
+                scopes:
+                  - https://www.googleapis.com/auth/cloud-platform
+
+            disks:
+              - boot: true
+                autoDelete: true
+                initializeParams:
+                  sourceImage: "projects/debian-cloud/global/images/family/debian-12"
+                  diskSizeGb: 100
+
+            networkInterfaces:
+              - network: "global/networks/default"
+                accessConfigs:
+                  - name: "External NAT"
+                    type: "ONE_TO_ONE_NAT"
+
+            metadata:
+              items:
+                # 🔑 GitHub token (string plano)
+                - key: GITHUB_TOKEN
+                  value: ${text.decode(base64.decode(github_token.payload.data))}
+
+                # 🧠 Runtime config (string JSON)
+                - key: RUNTIME_CONFIG_JSON
+                  value: >
+                    {"jira_project_key":"CLO","bq_project_id":"haulmer-ucloud-production","bq_dataset_id":"Jira"}
+
+                # 🚀 Startup script
+                - key: startup-script-url
+                  value: "https://raw.githubusercontent.com/drojas-haulmer/Api_Jira/main/scripts/startup.sh"
+
+    # --------------------------------------------------
+    # Fin del workflow
+    # --------------------------------------------------
+    - end_log:
+        call: sys.log
+        args:
+          severity: INFO
+          json:
+            message: "✅ VM creada. El ETL se ejecuta y la VM se eliminará automáticamente."
